@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from telegram_to_notion.models import IncomingMessage, MediaType
+from telegram_to_notion.models import IncomingMessage, MediaType, NotionEnrichment
 from telegram_to_notion.notion import NotionWriter
 
 
@@ -25,8 +25,9 @@ async def test_create_page_text_only(text_message):
     mock_client = MagicMock()
     mock_client.pages.create.return_value = {"id": "page-123"}
     writer = NotionWriter(client=mock_client, database_id="db-1")
+    enrichment = NotionEnrichment.from_incoming(text_message)
 
-    page_id = await writer.create_page(text_message)
+    page_id = await writer.create_page(text_message, enrichment)
 
     assert page_id == "page-123"
     mock_client.pages.create.assert_called_once()
@@ -36,3 +37,6 @@ async def test_create_page_text_only(text_message):
     assert props["Title"]["title"][0]["text"]["content"] == "hello"
     assert props["Sender"]["rich_text"][0]["text"]["content"] == "alice"
     assert props["Media type"]["select"]["name"] == "text"
+    assert props["Label"]["rich_text"][0]["text"]["content"] == "telegram"
+    assert props["Type"]["rich_text"][0]["text"]["content"] == "text"
+    assert props["Interest"]["rich_text"][0]["text"]["content"] == "Medium"

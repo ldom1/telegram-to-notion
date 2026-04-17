@@ -1,8 +1,11 @@
 """Telegram bot: long-polling listener that forwards messages to Notion."""
 
+import asyncio
 import sys
+import tempfile
 from collections.abc import Callable, Coroutine
 from datetime import timezone
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -22,14 +25,33 @@ from telegram_to_notion.media import (
     extract_document,
     extract_photo,
     extract_video,
+    extract_voice,
 )
 from telegram_to_notion.models import IncomingMessage, MediaPayload, MediaType
 from telegram_to_notion.notion import NotionWriter
+from telegram_to_notion.openrouter import interpret_message
+from telegram_to_notion.transcribe import transcribe_file
 
 
-async def _build_message(tg_message: Message) -> IncomingMessage:
+async def _transcribe_voice_note(settings: Settings, message: Message) -> str | None:
+    """Download voice bytes to a temp file and run faster-whisper in a worker thread."""
+    payload = await extract_voice(message)
+    with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
+        tmp.write(payload.content)
+        path = tmp.name
+    try:
+        return await asyncio.to_thread(
+            transcribe_file,
+            path,
+            settings.whisper_language,
+            settings.whisper_model_size,
+        )
+    finally:
+        Path(path).unlink(missing_ok=True)
+
+
+async def _build_message(settings: Settings, tg_message: Message) -> IncomingMessage:
     """Map a Telegram ``Message`` to our internal ``IncomingMessage`` model."""
-    media_type, media = await _resolve_media(tg_message)
     user = tg_message.from_user
     if user is not None:
         sender = user.username or user.full_name or "unknown"
@@ -39,6 +61,21 @@ async def _build_message(tg_message: Message) -> IncomingMessage:
     if sent_at.tzinfo is None:
         sent_at = sent_at.replace(tzinfo=timezone.utc)
 
+    if tg_message.voice is not None:
+        transcript = await _transcribe_voice_note(settings, tg_message)
+        text = transcript or (
+            "[voice] Transcription unavailable (install: uv sync --group transcribe)."
+        )
+        return IncomingMessage(
+            text=text,
+            caption=tg_message.caption,
+            sender=sender,
+            sent_at=sent_at,
+            media_type=MediaType.VOICE,
+            media=None,
+        )
+
+    media_type, media = await _resolve_media(tg_message)
     return IncomingMessage(
         text=tg_message.text,
         caption=tg_message.caption,
@@ -65,6 +102,7 @@ async def _resolve_media(
 
 
 def _make_handler(
+    settings: Settings,
     writer: NotionWriter,
 ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine[Any, Any, None]]:
     """Build a handler that forwards each message to ``writer``."""
@@ -73,8 +111,9 @@ def _make_handler(
         if update.effective_message is None:
             return
         try:
-            incoming = await _build_message(update.effective_message)
-            page_id = await writer.create_page(incoming)
+            incoming = await _build_message(settings, update.effective_message)
+            enrichment = await interpret_message(settings, incoming)
+            page_id = await writer.create_page(incoming, enrichment)
             logger.info("wrote notion page {} from {}", page_id, incoming.sender)
         except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.exception("failed to forward telegram message to notion")
@@ -88,10 +127,15 @@ def build_application(settings: Settings) -> Application[Any, Any, Any, Any, Any
     writer = NotionWriter(client=notion_client, database_id=settings.notion_database_id)
 
     app = ApplicationBuilder().token(settings.telegram_bot_token.get_secret_value()).build()
-    handler = _make_handler(writer)
+    handler = _make_handler(settings, writer)
     app.add_handler(
         MessageHandler(
-            filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.ANIMATION,
+            filters.TEXT
+            | filters.PHOTO
+            | filters.Document.ALL
+            | filters.VIDEO
+            | filters.ANIMATION
+            | filters.VOICE,
             handler,
         )
     )

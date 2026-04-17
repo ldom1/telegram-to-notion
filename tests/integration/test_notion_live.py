@@ -6,11 +6,12 @@ from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
-from notion_client import APIResponseError, Client as NotionClient
+from notion_client import APIResponseError
+from notion_client import Client as NotionClient
 from pydantic import ValidationError
 
 from telegram_to_notion.config import Settings
-from telegram_to_notion.models import IncomingMessage, MediaType
+from telegram_to_notion.models import IncomingMessage, MediaType, NotionEnrichment
 from telegram_to_notion.notion import NotionWriter
 
 pytestmark = pytest.mark.integration
@@ -54,15 +55,16 @@ async def test_create_text_page_notion_live(integration_settings: Settings) -> N
         media_type=MediaType.TEXT,
         media=None,
     )
+    enrichment = NotionEnrichment.from_incoming(msg)
     page_id: str | None = None
     try:
         try:
-            page_id = await writer.create_page(msg)
+            page_id = await writer.create_page(msg, enrichment)
         except APIResponseError as exc:
             if "not a property that exists" in str(exc):
                 pytest.skip(
-                    "Notion database is missing Title, Sender, Date, or Media type "
-                    "(see README prerequisites)."
+                    "Notion database schema does not match README (Title, Label, Type, URL, "
+                    "Description, Interest, Sender, Date, Media type)."
                 )
             raise
         assert page_id

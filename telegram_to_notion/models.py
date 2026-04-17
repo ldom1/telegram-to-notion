@@ -1,9 +1,21 @@
 """Pydantic data models for internal message flow."""
 
+import re
 from datetime import datetime
 from enum import Enum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
+
+_URL_RE = re.compile(r"https?://[^\s<>\[\]()]+", re.IGNORECASE)
+
+
+def _first_url(text: str) -> str | None:
+    """Return the first HTTP(S) URL in ``text``, with trailing punctuation trimmed."""
+    match = _URL_RE.search(text)
+    if not match:
+        return None
+    return match.group(0).rstrip(").,]\\\"'")
 
 
 class MediaType(str, Enum):
@@ -14,6 +26,7 @@ class MediaType(str, Enum):
     DOCUMENT = "document"
     VIDEO = "video"
     ANIMATION = "animation"
+    VOICE = "voice"
 
 
 class MediaPayload(BaseModel):
@@ -59,3 +72,31 @@ class IncomingMessage(BaseModel):
     def body(self) -> str:
         """Full text or caption for the page body (empty string if neither)."""
         return self.text or self.caption or ""
+
+
+class NotionEnrichment(BaseModel):
+    """Structured row fields for Notion (from OpenRouter or heuristics)."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True, populate_by_name=True)
+
+    title: str
+    label: str = ""
+    entry_type: str = Field(default="", alias="type")
+    url: str | None = None
+    description: str = ""
+    interest: str = ""
+
+    @classmethod
+    def from_incoming(cls, msg: IncomingMessage) -> Self:
+        """Heuristic mapping when OpenRouter is disabled or fails."""
+        body = msg.body
+        url = _first_url(body) if body else None
+        desc = body if body else msg.title
+        return cls(
+            title=msg.title[:2000],
+            label="telegram",
+            type=msg.media_type.value,
+            url=url,
+            description=desc[:8000],
+            interest="Medium",
+        )

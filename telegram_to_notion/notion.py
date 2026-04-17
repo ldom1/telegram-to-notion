@@ -6,7 +6,7 @@ from typing import Any, cast
 import httpx
 from notion_client import Client
 
-from telegram_to_notion.models import IncomingMessage, MediaPayload
+from telegram_to_notion.models import IncomingMessage, MediaPayload, NotionEnrichment
 
 
 class NotionWriter:  # pylint: disable=too-few-public-methods
@@ -16,14 +16,14 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
         self._client = client
         self._database_id = database_id
 
-    async def create_page(self, message: IncomingMessage) -> str:
+    async def create_page(self, message: IncomingMessage, enrichment: NotionEnrichment) -> str:
         """Create a page in the configured database; returns the new page id."""
         file_upload_id: str | None = None
         if message.media is not None:
             file_upload_id = await self._upload_file(message.media)
 
-        properties = self._build_properties(message)
-        children = self._build_children(message, file_upload_id)
+        properties = self._build_properties(message, enrichment)
+        children = self._build_children(message, enrichment, file_upload_id)
 
         response = await asyncio.to_thread(
             self._client.pages.create,
@@ -53,28 +53,46 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
         return upload_id
 
     @staticmethod
-    def _build_properties(message: IncomingMessage) -> dict[str, Any]:
-        """Database row properties: Title, Sender, Date, Media type."""
-        return {
-            "Title": {"title": [{"text": {"content": message.title}}]},
-            "Sender": {"rich_text": [{"text": {"content": message.sender}}]},
+    def _rich(text: str) -> dict[str, Any]:
+        """Notion rich_text property value (truncated)."""
+        chunk = (text or "")[:2000]
+        if not chunk:
+            return {"rich_text": []}
+        return {"rich_text": [{"type": "text", "text": {"content": chunk}}]}
+
+    @staticmethod
+    def _build_properties(message: IncomingMessage, enrichment: NotionEnrichment) -> dict[str, Any]:
+        """Database row properties: Title, Label, Type, URL, Description, Interest, metadata."""
+        props: dict[str, Any] = {
+            "Title": {"title": [{"text": {"content": enrichment.title[:2000]}}]},
+            "Label": NotionWriter._rich(enrichment.label),
+            "Type": NotionWriter._rich(enrichment.entry_type),
+            "Description": NotionWriter._rich(enrichment.description[:2000]),
+            "Interest": NotionWriter._rich(enrichment.interest),
+            "Sender": NotionWriter._rich(message.sender),
             "Date": {"date": {"start": message.sent_at.isoformat()}},
             "Media type": {"select": {"name": message.media_type.value}},
         }
+        if enrichment.url and enrichment.url.strip():
+            props["URL"] = {"url": enrichment.url.strip()[:2000]}
+        return props
 
     @staticmethod
     def _build_children(
-        message: IncomingMessage, file_upload_id: str | None
+        message: IncomingMessage,
+        enrichment: NotionEnrichment,
+        file_upload_id: str | None,
     ) -> list[dict[str, Any]]:
         """Page body blocks: optional paragraph, optional file/image/video block."""
         blocks: list[dict[str, Any]] = []
-        if message.body:
+        body_text = (message.body or enrichment.description or "").strip()
+        if body_text:
             blocks.append(
                 {
                     "object": "block",
                     "type": "paragraph",
                     "paragraph": {
-                        "rich_text": [{"type": "text", "text": {"content": message.body}}]
+                        "rich_text": [{"type": "text", "text": {"content": body_text[:2000]}}]
                     },
                 }
             )
