@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Notion `pages.create` parent** for databases that expose `data_sources`: use
-  `type: data_source_id` (schema-matching source, or `NOTION_DATA_SOURCE_ID`) so properties resolve.
+  `type: data_source_id` only (no `database_id` on that parent; schema-matching source or
+  `NOTION_DATA_SOURCE_ID`) so properties resolve.
 - **`NOTION_DATABASE_ID`** accepts 32-char hex from Notion URLs (auto-normalize to dashed UUID).
 - **`NOTION_TITLE_PROPERTY`** when the title column is not named `Title` (e.g. Notion’s `Name`).
 - **Telegram feedback:** reply on success/failure; `/ping` command; log incoming `chat_id`.
@@ -21,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenRouter LLM enrichment** for Notion row fields: `Title`, `Label`, `Type`, `URL`,
   `Description`, `Interest` (default model `google/gemini-2.5-flash-lite`). Heuristic fallback
   when `OPENROUTER_API_KEY` is unset.
-- `NotionEnrichment` model and `telegram_to_notion/openrouter.py`.
+- `NotionEnrichment` model and `telegram_to_notion/llm/openrouter.py`.
 
 ### Changed
 

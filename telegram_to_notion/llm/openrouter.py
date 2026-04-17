@@ -10,6 +10,7 @@ from loguru import logger
 from pydantic import ValidationError
 
 from telegram_to_notion.config import Settings
+from telegram_to_notion.llm.prompt import build_openrouter_system_prompt
 from telegram_to_notion.models import IncomingMessage, NotionEnrichment
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -29,12 +30,12 @@ def _strip_json_fence(raw: str) -> str:
 def _merge_enrichment(base: NotionEnrichment, data: dict[str, Any]) -> NotionEnrichment:
     """Overlay parsed LLM keys onto ``base`` (validated)."""
     merged: dict[str, Any] = dict(base.model_dump(by_alias=True))
-    for key in ("title", "label", "type", "url", "description", "interest"):
+    for key in ("title", "label", "type", "url", "source", "description", "interest"):
         if key not in data:
             continue
         val = data[key]
         if val is None:
-            if key == "url":
+            if key in ("url", "source"):
                 merged[key] = None
             continue
         if isinstance(val, str) and val.strip() == "":
@@ -50,24 +51,10 @@ async def interpret_message(settings: Settings, incoming: IncomingMessage) -> No
     if key is None or not key.get_secret_value().strip():
         return base
 
-    system = (
-        "You help file Telegram messages into a Notion database. Reply with ONLY a JSON object, "
-        "no markdown fences, using these keys: "
-        '"title" (string, concise page title), '
-        '"label" (short tag e.g. work, personal, finance, idea), '
-        '"type" (one of: note, task, link, media, question, other), '
-        '"url" (string URL or null if none), '
-        '"description" (1-3 sentences summarizing the message for humans), '
-        '"interest" (one of: Low, Medium, High). '
-        "Use the user's language when appropriate. "
-        f"Telegram sender: {incoming.sender}. "
-        f"Media channel: {incoming.media_type.value}. "
-        f"Raw text/caption:\n{incoming.body[:12000]}"
-    )
     payload: dict[str, Any] = {
         "model": settings.openrouter_model,
         "messages": [
-            {"role": "system", "content": system},
+            {"role": "system", "content": build_openrouter_system_prompt(incoming)},
             {"role": "user", "content": "Produce the JSON object now."},
         ],
     }

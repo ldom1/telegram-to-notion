@@ -30,7 +30,7 @@ from telegram_to_notion.media import (
 )
 from telegram_to_notion.models import IncomingMessage, MediaPayload, MediaType
 from telegram_to_notion.notion import NotionWriter
-from telegram_to_notion.openrouter import interpret_message
+from telegram_to_notion.llm.openrouter import interpret_message
 from telegram_to_notion.transcribe import transcribe_file
 
 

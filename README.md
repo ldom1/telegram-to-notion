@@ -5,8 +5,9 @@ photos, documents, videos, GIFs, **voice notes**) via long polling and forwards 
 structured page into a Notion database. Voice is transcribed locally with
 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (bundled with `uv sync`; model downloads on first use).
 Optional [OpenRouter](https://openrouter.ai/) (`google/gemini-2.5-flash-lite` by default) fills
-**Title**, **Label**, **Type**, **URL**, **Description**, and **Interest** from each message;
-without `OPENROUTER_API_KEY`, the same columns are filled with simple heuristics.
+**Title**, **Label**, **Type**, **URL**, **Description**, **Interest**, and a structured **source**
+(platform, e.g. GitHub); when set, **source** is appended to the Notion **Description** (no extra DB column).
+Without `OPENROUTER_API_KEY`, the same columns are filled with simple heuristics (including **source** when a known URL host appears).
 
 No HTTP server. No webhooks. No third-party SaaS.
 
@@ -27,7 +28,7 @@ No HTTP server. No webhooks. No third-party SaaS.
   - `Date` (date)
   - `Media type` (select with options: `text`, `photo`, `document`, `video`, `animation`, `voice`)
 
-**Linked / multi-source Notion databases (2025+ API):** rows live under a **data source**. The bot calls `databases.retrieve`, then **`data_sources.retrieve`** on each source until it finds one whose **property names** match this bridge (or falls back to the first source). Override with **`NOTION_DATA_SOURCE_ID`** if needed.
+**Linked / multi-source Notion databases (2025+ API):** rows live under a **data source**. The bot calls `databases.retrieve`, then **`data_sources.retrieve`** on each source until it finds one whose **property names** match this bridge (or falls back to the first source). `pages.create` uses parent `type` + `data_source_id` only (Notion rejects `database_id` on that parent). Override with **`NOTION_DATA_SOURCE_ID`** if needed.
 
 **Database id from a Notion URL:** use the **32-character** id in the page path (before `?`), e.g. `https://www.notion.so/3456c45194658025ac90ff3627b14bbf?...` → set `NOTION_DATABASE_ID` to that string (hyphens optional; they are normalized).
 
@@ -90,7 +91,10 @@ telegram_to_notion/
 ├── config.py      # Pydantic settings (env var validation)
 ├── models.py      # Internal Pydantic data types
 ├── notion.py      # Notion page + file_upload wrapper
-├── openrouter.py  # Optional LLM enrichment via OpenRouter
+├── llm/
+│   ├── openrouter.py   # Optional LLM enrichment via OpenRouter
+│   ├── prompt.py       # System prompt for structured JSON extraction
+│   └── source_hints.py # URL host → platform label (prompt + heuristics)
 ├── transcribe.py  # faster-whisper wrapper (default dependency)
 ├── bot.py         # Telegram polling + handlers
 └── media/         # Per-media-type extractors + shared downloader

@@ -66,3 +66,17 @@ def test_notion_enrichment_from_incoming_extracts_url():
     )
     en = NotionEnrichment.from_incoming(msg)
     assert en.url == "https://example.org/a"
+    assert en.source is None
+
+
+def test_notion_enrichment_from_incoming_sets_source_from_github_url():
+    msg = IncomingMessage(
+        text="see https://github.com/foo/bar",
+        caption=None,
+        sender="u",
+        sent_at=datetime(2026, 4, 17, tzinfo=timezone.utc),
+        media_type=MediaType.TEXT,
+        media=None,
+    )
+    en = NotionEnrichment.from_incoming(msg)
+    assert en.source == "GitHub"

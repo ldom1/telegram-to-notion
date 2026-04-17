@@ -7,6 +7,8 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from telegram_to_notion.llm.source_hints import infer_source_label
+
 _URL_RE = re.compile(r"https?://[^\s<>\[\]()]+", re.IGNORECASE)
 
 
@@ -83,6 +85,7 @@ class NotionEnrichment(BaseModel):
     label: str = ""
     entry_type: str = Field(default="", alias="type")
     url: str | None = None
+    source: str | None = None
     description: str = ""
     interest: str = ""
 
@@ -92,11 +95,13 @@ class NotionEnrichment(BaseModel):
         body = msg.body
         url = _first_url(body) if body else None
         desc = body if body else msg.title
+        src = infer_source_label(body) if body else None
         return cls(
             title=msg.title[:2000],
             label="telegram",
             type=msg.media_type.value,
             url=url,
+            source=src,
             description=desc[:8000],
             interest="Medium",
         )

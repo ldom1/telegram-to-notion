@@ -46,7 +46,12 @@ async def test_notion_database_retrieve_live(integration_settings: Settings) -> 
 async def test_create_text_page_notion_live(integration_settings: Settings) -> None:
     """Create a text-only page then archive it (needs DB properties from README)."""
     client = NotionClient(auth=integration_settings.notion_token.get_secret_value())
-    writer = NotionWriter(client=client, database_id=integration_settings.notion_database_id)
+    writer = NotionWriter(
+        client=client,
+        database_id=integration_settings.notion_database_id,
+        data_source_id=integration_settings.notion_data_source_id,
+        title_property=integration_settings.notion_title_property,
+    )
     msg = IncomingMessage(
         text="[integration-test] telegram-to-notion",
         caption=None,

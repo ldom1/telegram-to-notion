@@ -59,11 +59,7 @@ async def test_create_page_uses_first_data_source(text_message):
     await writer.create_page(text_message, enrichment)
 
     parent = mock_client.pages.create.call_args.kwargs["parent"]
-    assert parent == {
-        "type": "data_source_id",
-        "data_source_id": "ds-aaa",
-        "database_id": "db-1",
-    }
+    assert parent == {"type": "data_source_id", "data_source_id": "ds-aaa"}
 
 
 async def test_create_page_picks_data_source_with_matching_schema(text_message):
@@ -113,8 +109,4 @@ async def test_create_page_explicit_data_source_override(text_message):
 
     mock_client.databases.retrieve.assert_not_called()
     parent = mock_client.pages.create.call_args.kwargs["parent"]
-    assert parent == {
-        "type": "data_source_id",
-        "data_source_id": "ds-fixed",
-        "database_id": "db-1",
-    }
+    assert parent == {"type": "data_source_id", "data_source_id": "ds-fixed"}

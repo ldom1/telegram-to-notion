@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from telegram_to_notion.config import Settings
 from telegram_to_notion.models import IncomingMessage, MediaType
-from telegram_to_notion.openrouter import interpret_message
+from telegram_to_notion.llm.openrouter import interpret_message
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ async def test_interpret_without_api_key(sample_message):
     assert out.url == "https://example.com/path"
 
 
-@patch("telegram_to_notion.openrouter.httpx.AsyncClient")
+@patch("telegram_to_notion.llm.openrouter.httpx.AsyncClient")
 async def test_interpret_openrouter_success(mock_client_cls, sample_message, monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t:ok")
     monkeypatch.setenv("NOTION_TOKEN", "secret")
@@ -51,8 +51,8 @@ async def test_interpret_openrouter_success(mock_client_cls, sample_message, mon
         "choices": [
             {
                 "message": {
-                    "content": '{"title":"T","label":"work","type":"link","url":"https://x.com",'
-                    '"description":"D","interest":"High"}'
+                    "content": '{"title":"T","label":"work","type":"link","source":"Twitter / X",'
+                    '"url":"https://x.com","description":"D","interest":"High"}'
                 }
             }
         ]
@@ -70,9 +70,10 @@ async def test_interpret_openrouter_success(mock_client_cls, sample_message, mon
     assert out.url == "https://x.com"
     assert out.description == "D"
     assert out.interest == "High"
+    assert out.source == "Twitter / X"
 
 
-@patch("telegram_to_notion.openrouter.httpx.AsyncClient")
+@patch("telegram_to_notion.llm.openrouter.httpx.AsyncClient")
 async def test_interpret_openrouter_http_error(mock_client_cls, sample_message, monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t:ok")
     monkeypatch.setenv("NOTION_TOKEN", "secret")

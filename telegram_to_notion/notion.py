@@ -97,7 +97,6 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
             self._cached_parent = {
                 "type": "data_source_id",
                 "data_source_id": self._data_source_id_override,
-                "database_id": self._database_id,
             }
             return self._cached_parent
 
@@ -111,11 +110,7 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
 
         ds_id = await self._pick_data_source_id(db)
         if ds_id:
-            self._cached_parent = {
-                "type": "data_source_id",
-                "data_source_id": ds_id,
-                "database_id": db_id,
-            }
+            self._cached_parent = {"type": "data_source_id", "data_source_id": ds_id}
             return self._cached_parent
 
         self._cached_parent = {"type": "database_id", "database_id": db_id}
@@ -170,13 +165,16 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
         self, message: IncomingMessage, enrichment: NotionEnrichment
     ) -> dict[str, Any]:
         """Database row properties: title column, Label, Type, URL, Description, Interest."""
+        desc = enrichment.description.strip()
+        if enrichment.source and enrichment.source.strip():
+            desc = f"{desc}\n\nSource: {enrichment.source.strip()}".strip()
         props: dict[str, Any] = {
             self._title_property: {
                 "title": [{"text": {"content": enrichment.title[:2000]}}],
             },
             "Label": self._rich(enrichment.label),
             "Type": self._rich(enrichment.entry_type),
-            "Description": self._rich(enrichment.description[:2000]),
+            "Description": self._rich(desc[:2000]),
             "Interest": self._rich(enrichment.interest),
             "Sender": self._rich(message.sender),
             "Date": {"date": {"start": message.sent_at.isoformat()}},
