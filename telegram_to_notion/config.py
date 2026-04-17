@@ -1,7 +1,16 @@
 """Runtime configuration loaded from environment variables."""
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalize_notion_uuid(value: str) -> str:
+    """Turn a 32-char hex id (common in Notion URLs) into hyphenated UUID form."""
+    raw = value.strip()
+    compact = raw.replace("-", "").lower()
+    if len(compact) == 32 and all(c in "0123456789abcdef" for c in compact):
+        return f"{compact[:8]}-{compact[8:12]}-{compact[12:16]}-{compact[16:20]}-{compact[20:]}"
+    return raw
 
 
 class Settings(BaseSettings):  # pylint: disable=too-many-instance-attributes
@@ -20,6 +29,10 @@ class Settings(BaseSettings):  # pylint: disable=too-many-instance-attributes
     notion_data_source_id: str | None = Field(
         default=None,
         description="Optional data source UUID; if unset, first data source from DB is used",
+    )
+    notion_title_property: str = Field(
+        default="Title",
+        description="Notion title column name (use Name if your DB uses the default title)",
     )
 
     whisper_language: str = Field(default="fr", description="Whisper language code for voice")
@@ -44,6 +57,23 @@ class Settings(BaseSettings):  # pylint: disable=too-many-instance-attributes
         default="telegram-to-notion",
         description="Optional X-OpenRouter-Title header",
     )
+
+    @field_validator("notion_database_id", mode="before")
+    @classmethod
+    def _normalize_database_id(cls, value: object) -> str:
+        if value is None:
+            raise ValueError("NOTION_DATABASE_ID is required")
+        return normalize_notion_uuid(str(value))
+
+    @field_validator("notion_data_source_id", mode="before")
+    @classmethod
+    def _normalize_data_source_id(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+        return normalize_notion_uuid(s)
 
 
 def load_settings() -> Settings:

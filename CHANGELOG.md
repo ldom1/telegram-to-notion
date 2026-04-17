@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Notion `pages.create` parent** for databases that expose `data_sources`: use
-  `type: data_source_id` (first source, or `NOTION_DATA_SOURCE_ID`) so properties resolve.
+  `type: data_source_id` (schema-matching source, or `NOTION_DATA_SOURCE_ID`) so properties resolve.
+- **`NOTION_DATABASE_ID`** accepts 32-char hex from Notion URLs (auto-normalize to dashed UUID).
+- **`NOTION_TITLE_PROPERTY`** when the title column is not named `Title` (e.g. Notion’s `Name`).
 - **Telegram feedback:** reply on success/failure; `/ping` command; log incoming `chat_id`.
 - **OpenRouter:** HTTP call capped with a **45s** `asyncio.wait_for` timeout (falls back to heuristics).
 

@@ -17,7 +17,7 @@ No HTTP server. No webhooks. No third-party SaaS.
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
 - A [Notion internal integration](https://www.notion.so/my-integrations) token
 - A Notion database shared with that integration, containing the properties:
-  - `Title` (title)
+  - `Title` (title) — if your first column is **`Name`**, set **`NOTION_TITLE_PROPERTY=Name`**
   - `Label` (rich text)
   - `Type` (rich text) — LLM or heuristic “kind” (e.g. note, link, media)
   - `URL` (url) — set when a link is detected or proposed by the LLM
@@ -27,7 +27,9 @@ No HTTP server. No webhooks. No third-party SaaS.
   - `Date` (date)
   - `Media type` (select with options: `text`, `photo`, `document`, `video`, `animation`, `voice`)
 
-**Linked / multi-source Notion databases (2025+ API):** rows live under a **data source**, not the bare database id. The bot calls `databases.retrieve` and, if `data_sources` is present, parents new pages with the **first** data source plus your `NOTION_DATABASE_ID`. Override with **`NOTION_DATA_SOURCE_ID`** if you have several sources.
+**Linked / multi-source Notion databases (2025+ API):** rows live under a **data source**. The bot calls `databases.retrieve`, then **`data_sources.retrieve`** on each source until it finds one whose **property names** match this bridge (or falls back to the first source). Override with **`NOTION_DATA_SOURCE_ID`** if needed.
+
+**Database id from a Notion URL:** use the **32-character** id in the page path (before `?`), e.g. `https://www.notion.so/3456c45194658025ac90ff3627b14bbf?...` → set `NOTION_DATABASE_ID` to that string (hyphens optional; they are normalized).
 
 ## Setup
 

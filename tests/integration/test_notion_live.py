@@ -63,8 +63,9 @@ async def test_create_text_page_notion_live(integration_settings: Settings) -> N
         except APIResponseError as exc:
             if "not a property that exists" in str(exc):
                 pytest.skip(
-                    "Notion database schema does not match README (Title, Label, Type, URL, "
-                    "Description, Interest, Sender, Date, Media type)."
+                    "Notion database schema does not match README (Title or NOTION_TITLE_PROPERTY, "
+                    "Label, Type, URL, Description, Interest, Sender, Date, Media type) or wrong "
+                    "data source — set NOTION_DATA_SOURCE_ID."
                 )
             raise
         assert page_id

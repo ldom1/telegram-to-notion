@@ -4,9 +4,27 @@ import asyncio
 from typing import Any, cast
 
 import httpx
+from loguru import logger
 from notion_client import Client
+from notion_client.errors import APIResponseError, UnknownHTTPResponseError
 
 from telegram_to_notion.models import IncomingMessage, MediaPayload, NotionEnrichment
+
+
+def _required_notion_property_names(title_key: str) -> frozenset[str]:
+    """Property names that must exist on the data source for ``pages.create`` to succeed."""
+    return frozenset(
+        {
+            title_key,
+            "Label",
+            "Type",
+            "Description",
+            "Interest",
+            "Sender",
+            "Date",
+            "Media type",
+        }
+    )
 
 
 class NotionWriter:  # pylint: disable=too-few-public-methods
@@ -18,11 +36,57 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
         database_id: str,
         *,
         data_source_id: str | None = None,
+        title_property: str = "Title",
     ) -> None:
         self._client = client
         self._database_id = database_id
         self._data_source_id_override = (data_source_id or "").strip() or None
+        self._title_property = (title_property or "Title").strip() or "Title"
         self._cached_parent: dict[str, Any] | None = None
+
+    def _required_props(self) -> frozenset[str]:
+        return _required_notion_property_names(self._title_property)
+
+    async def _pick_data_source_id(self, db: dict[str, Any]) -> str | None:
+        """Pick a data source id whose schema includes all columns this bridge writes."""
+        sources = db.get("data_sources") or []
+        if not isinstance(sources, list) or not sources:
+            return None
+        required = self._required_props()
+        summaries: list[str] = []
+        for entry in sources:
+            ds_id = str(entry.get("id", "")).strip()
+            if not ds_id:
+                continue
+            try:
+                detail = cast(
+                    dict[str, Any],
+                    await asyncio.to_thread(self._client.data_sources.retrieve, ds_id),
+                )
+            except (APIResponseError, UnknownHTTPResponseError, httpx.HTTPError) as exc:
+                logger.warning("notion data_sources.retrieve failed for {}: {}", ds_id, exc)
+                continue
+            props = detail.get("properties") or {}
+            names = set(props) if isinstance(props, dict) else set()
+            sample = sorted(names)[:12]
+            tail = "…" if len(names) > 12 else ""
+            summaries.append(f"{ds_id[:8]}… keys={sample}{tail}")
+            if required <= names:
+                logger.info(
+                    "using notion data_source_id={} (schema matches bridge properties)",
+                    ds_id,
+                )
+                return ds_id
+        if summaries:
+            logger.warning(
+                "no notion data source matched required columns {}; tried: {}",
+                sorted(required),
+                "; ".join(summaries),
+            )
+        first = str(sources[0].get("id", "")).strip()
+        if first:
+            logger.warning("falling back to first notion data_source_id={}", first)
+        return first or None
 
     async def _resolve_parent(self) -> dict[str, Any]:
         """Build ``parent`` for ``pages.create`` (database vs data source per Notion 2025+)."""
@@ -45,16 +109,14 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
         )
         db_id = str(db.get("id", self._database_id))
 
-        sources = db.get("data_sources") or []
-        if isinstance(sources, list) and sources:
-            ds_id = str(sources[0].get("id", ""))
-            if ds_id:
-                self._cached_parent = {
-                    "type": "data_source_id",
-                    "data_source_id": ds_id,
-                    "database_id": db_id,
-                }
-                return self._cached_parent
+        ds_id = await self._pick_data_source_id(db)
+        if ds_id:
+            self._cached_parent = {
+                "type": "data_source_id",
+                "data_source_id": ds_id,
+                "database_id": db_id,
+            }
+            return self._cached_parent
 
         self._cached_parent = {"type": "database_id", "database_id": db_id}
         return self._cached_parent
@@ -104,16 +166,19 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
             return {"rich_text": []}
         return {"rich_text": [{"type": "text", "text": {"content": chunk}}]}
 
-    @staticmethod
-    def _build_properties(message: IncomingMessage, enrichment: NotionEnrichment) -> dict[str, Any]:
-        """Database row properties: Title, Label, Type, URL, Description, Interest, metadata."""
+    def _build_properties(
+        self, message: IncomingMessage, enrichment: NotionEnrichment
+    ) -> dict[str, Any]:
+        """Database row properties: title column, Label, Type, URL, Description, Interest."""
         props: dict[str, Any] = {
-            "Title": {"title": [{"text": {"content": enrichment.title[:2000]}}]},
-            "Label": NotionWriter._rich(enrichment.label),
-            "Type": NotionWriter._rich(enrichment.entry_type),
-            "Description": NotionWriter._rich(enrichment.description[:2000]),
-            "Interest": NotionWriter._rich(enrichment.interest),
-            "Sender": NotionWriter._rich(message.sender),
+            self._title_property: {
+                "title": [{"text": {"content": enrichment.title[:2000]}}],
+            },
+            "Label": self._rich(enrichment.label),
+            "Type": self._rich(enrichment.entry_type),
+            "Description": self._rich(enrichment.description[:2000]),
+            "Interest": self._rich(enrichment.interest),
+            "Sender": self._rich(message.sender),
             "Date": {"date": {"start": message.sent_at.isoformat()}},
             "Media type": {"select": {"name": message.media_type.value}},
         }

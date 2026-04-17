@@ -133,9 +133,14 @@ def _make_handler(
             )
         except APIResponseError as exc:
             logger.error("notion API error: {}", exc)
+            detail = str(exc).replace("\n", " ").strip()
+            if len(detail) > 450:
+                detail = f"{detail[:447]}..."
             await msg.reply_text(
-                "Notion rejected this row (schema, parent, or permissions). "
-                "See server logs for details."
+                "Notion API error:\n"
+                f"{detail}\n"
+                "If columns differ, rename them to match the README or set NOTION_TITLE_PROPERTY "
+                "(e.g. Name). Check NOTION_DATABASE_ID from the database page URL."
             )
         except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.exception("failed to forward telegram message to notion")
@@ -151,6 +156,7 @@ def build_application(settings: Settings) -> Application[Any, Any, Any, Any, Any
         client=notion_client,
         database_id=settings.notion_database_id,
         data_source_id=settings.notion_data_source_id,
+        title_property=settings.notion_title_property,
     )
 
     app = ApplicationBuilder().token(settings.telegram_bot_token.get_secret_value()).build()
