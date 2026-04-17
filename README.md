@@ -3,7 +3,7 @@
 Self-hosted Telegram → Notion bridge. A Telegram bot listens for messages (text,
 photos, documents, videos, GIFs, **voice notes**) via long polling and forwards each one as a
 structured page into a Notion database. Voice is transcribed locally with
-[faster-whisper](https://github.com/SYSTRAN/faster-whisper) (optional install).
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) (bundled with `uv sync`; model downloads on first use).
 Optional [OpenRouter](https://openrouter.ai/) (`google/gemini-2.5-flash-lite` by default) fills
 **Title**, **Label**, **Type**, **URL**, **Description**, and **Interest** from each message;
 without `OPENROUTER_API_KEY`, the same columns are filled with simple heuristics.
@@ -33,8 +33,6 @@ No HTTP server. No webhooks. No third-party SaaS.
 cp .env.example .env
 # edit .env: TELEGRAM_BOT_TOKEN, NOTION_TOKEN, NOTION_DATABASE_ID; optional OPENROUTER_API_KEY
 uv sync
-# optional: local voice transcription (faster-whisper; downloads model on first use)
-uv sync --group transcribe
 ```
 
 ## Run
@@ -58,7 +56,7 @@ The bot runs on **`devbox`** under your user as **`telegram-to-notion.service`**
 **Update the running bot after you push from your laptop:**
 
 ```bash
-ssh devbox 'cd ~/Lab/dom-telegram-to-notion && git pull && ~/.local/bin/uv sync --group transcribe && systemctl --user restart telegram-to-notion.service'
+ssh devbox 'cd ~/Lab/dom-telegram-to-notion && git pull && ~/.local/bin/uv sync && systemctl --user restart telegram-to-notion.service'
 ```
 
 **Logs / status:**
@@ -88,7 +86,7 @@ telegram_to_notion/
 ├── models.py      # Internal Pydantic data types
 ├── notion.py      # Notion page + file_upload wrapper
 ├── openrouter.py  # Optional LLM enrichment via OpenRouter
-├── transcribe.py  # faster-whisper wrapper (optional dependency group)
+├── transcribe.py  # faster-whisper wrapper (default dependency)
 ├── bot.py         # Telegram polling + handlers
 └── media/         # Per-media-type extractors + shared downloader
 ```

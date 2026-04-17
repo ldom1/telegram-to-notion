@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when `OPENROUTER_API_KEY` is unset.
 - `NotionEnrichment` model and `telegram_to_notion/openrouter.py`.
 
+### Changed
+
+- **faster-whisper** (`>=1.2.1`) is a **default** project dependency again (voice works after
+  `uv sync` only; no separate dependency group).
+
 ## [0.2.0] - 2026-04-17
 
 ### Added

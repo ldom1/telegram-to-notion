@@ -64,7 +64,7 @@ async def _build_message(settings: Settings, tg_message: Message) -> IncomingMes
     if tg_message.voice is not None:
         transcript = await _transcribe_voice_note(settings, tg_message)
         text = transcript or (
-            "[voice] Transcription unavailable (install: uv sync --group transcribe)."
+            "[voice] Transcription unavailable (check uv sync / faster-whisper import)."
         )
         return IncomingMessage(
             text=text,

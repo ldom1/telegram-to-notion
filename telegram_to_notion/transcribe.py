@@ -20,8 +20,8 @@ def transcribe_file(
 ) -> str | None:
     """Transcribe an audio file (e.g. mp3, wav, ogg, flac, m4a) to plain text.
 
-    Requires the optional ``transcribe`` dependency group (``faster-whisper``). The chosen
-    model is downloaded on first use (size depends on ``model_size``).
+    Requires ``faster-whisper`` (declared in the main project dependencies). The chosen model
+    is downloaded on first use (size depends on ``model_size``).
 
     Args:
         audio_path: Path to the audio file on disk.
@@ -37,7 +37,7 @@ def transcribe_file(
         logger.error("Audio file not found: {}", audio_path)
         return None
     if WhisperModel is None:
-        logger.error("faster-whisper not installed. Run: uv sync --group transcribe")
+        logger.error("faster-whisper not installed. Run: uv sync")
         return None
 
     try:
