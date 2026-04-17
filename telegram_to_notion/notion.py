@@ -12,9 +12,52 @@ from telegram_to_notion.models import IncomingMessage, MediaPayload, NotionEnric
 class NotionWriter:  # pylint: disable=too-few-public-methods
     """Create Notion database pages from ``IncomingMessage`` values (text + file uploads)."""
 
-    def __init__(self, client: Client, database_id: str) -> None:
+    def __init__(
+        self,
+        client: Client,
+        database_id: str,
+        *,
+        data_source_id: str | None = None,
+    ) -> None:
         self._client = client
         self._database_id = database_id
+        self._data_source_id_override = (data_source_id or "").strip() or None
+        self._cached_parent: dict[str, Any] | None = None
+
+    async def _resolve_parent(self) -> dict[str, Any]:
+        """Build ``parent`` for ``pages.create`` (database vs data source per Notion 2025+)."""
+        if self._cached_parent is not None:
+            return self._cached_parent
+
+        if self._data_source_id_override:
+            self._cached_parent = {
+                "type": "data_source_id",
+                "data_source_id": self._data_source_id_override,
+                "database_id": self._database_id,
+            }
+            return self._cached_parent
+
+        db = cast(
+            dict[str, Any],
+            await asyncio.to_thread(
+                self._client.databases.retrieve, database_id=self._database_id
+            ),
+        )
+        db_id = str(db.get("id", self._database_id))
+
+        sources = db.get("data_sources") or []
+        if isinstance(sources, list) and sources:
+            ds_id = str(sources[0].get("id", ""))
+            if ds_id:
+                self._cached_parent = {
+                    "type": "data_source_id",
+                    "data_source_id": ds_id,
+                    "database_id": db_id,
+                }
+                return self._cached_parent
+
+        self._cached_parent = {"type": "database_id", "database_id": db_id}
+        return self._cached_parent
 
     async def create_page(self, message: IncomingMessage, enrichment: NotionEnrichment) -> str:
         """Create a page in the configured database; returns the new page id."""
@@ -24,10 +67,11 @@ class NotionWriter:  # pylint: disable=too-few-public-methods
 
         properties = self._build_properties(message, enrichment)
         children = self._build_children(message, enrichment, file_upload_id)
+        parent = await self._resolve_parent()
 
         response = await asyncio.to_thread(
             self._client.pages.create,
-            parent={"database_id": self._database_id},
+            parent=parent,
             properties=properties,
             children=children,
         )

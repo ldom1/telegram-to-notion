@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2026-04-17
 
+### Fixed
+
+- **Notion `pages.create` parent** for databases that expose `data_sources`: use
+  `type: data_source_id` (first source, or `NOTION_DATA_SOURCE_ID`) so properties resolve.
+- **Telegram feedback:** reply on success/failure; `/ping` command; log incoming `chat_id`.
+- **OpenRouter:** HTTP call capped with a **45s** `asyncio.wait_for` timeout (falls back to heuristics).
+
 ### Added
 
 - **OpenRouter LLM enrichment** for Notion row fields: `Title`, `Label`, `Type`, `URL`,

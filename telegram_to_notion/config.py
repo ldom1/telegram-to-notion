@@ -17,6 +17,10 @@ class Settings(BaseSettings):  # pylint: disable=too-many-instance-attributes
     telegram_bot_token: SecretStr
     notion_token: SecretStr
     notion_database_id: str
+    notion_data_source_id: str | None = Field(
+        default=None,
+        description="Optional data source UUID; if unset, first data source from DB is used",
+    )
 
     whisper_language: str = Field(default="fr", description="Whisper language code for voice")
     whisper_model_size: str = Field(

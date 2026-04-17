@@ -1,5 +1,6 @@
 """Interpret Telegram payloads for Notion rows via OpenRouter chat completions."""
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -81,7 +82,10 @@ async def interpret_message(settings: Settings, incoming: IncomingMessage) -> No
 
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
-            resp = await client.post(OPENROUTER_URL, headers=headers, json=payload)
+            resp = await asyncio.wait_for(
+                client.post(OPENROUTER_URL, headers=headers, json=payload),
+                timeout=45.0,
+            )
             resp.raise_for_status()
             body = resp.json()
         raw_content = body["choices"][0]["message"]["content"]
@@ -95,6 +99,13 @@ async def interpret_message(settings: Settings, incoming: IncomingMessage) -> No
         if not isinstance(parsed, dict):
             return base
         return _merge_enrichment(base, parsed)
-    except (httpx.HTTPError, json.JSONDecodeError, KeyError, ValidationError, TypeError) as exc:
+    except (
+        asyncio.TimeoutError,
+        httpx.HTTPError,
+        json.JSONDecodeError,
+        KeyError,
+        ValidationError,
+        TypeError,
+    ) as exc:
         logger.warning("OpenRouter enrichment failed, using heuristics: {}", exc)
         return base

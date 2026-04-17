@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
-from notion_client import Client as NotionClient
+from notion_client import APIResponseError, Client as NotionClient
 from telegram import Message, Update
 from telegram.ext import (
     Application,
     ApplicationBuilder,
+    CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
@@ -101,6 +102,12 @@ async def _resolve_media(
     return MediaType.TEXT, None
 
 
+async def _ping_cmd(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lightweight health check in Telegram."""
+    if update.message is not None:
+        await update.message.reply_text("telegram-to-notion: ok")
+
+
 def _make_handler(
     settings: Settings,
     writer: NotionWriter,
@@ -108,15 +115,31 @@ def _make_handler(
     """Build a handler that forwards each message to ``writer``."""
 
     async def handle(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-        if update.effective_message is None:
+        msg = update.effective_message
+        if msg is None:
             return
         try:
-            incoming = await _build_message(settings, update.effective_message)
+            logger.info(
+                "incoming message chat_id={} from_user={}",
+                msg.chat_id,
+                msg.from_user.id if msg.from_user else None,
+            )
+            incoming = await _build_message(settings, msg)
             enrichment = await interpret_message(settings, incoming)
             page_id = await writer.create_page(incoming, enrichment)
             logger.info("wrote notion page {} from {}", page_id, incoming.sender)
+            await msg.reply_text(
+                f"Saved to Notion.\nTitle: {incoming.title[:120]}\nPage id: {page_id}"
+            )
+        except APIResponseError as exc:
+            logger.error("notion API error: {}", exc)
+            await msg.reply_text(
+                "Notion rejected this row (schema, parent, or permissions). "
+                "See server logs for details."
+            )
         except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.exception("failed to forward telegram message to notion")
+            await msg.reply_text("Could not forward to Notion. See server logs.")
 
     return handle
 
@@ -124,9 +147,14 @@ def _make_handler(
 def build_application(settings: Settings) -> Application[Any, Any, Any, Any, Any, Any]:
     """Wire Telegram ``Application`` with Notion-backed message handlers."""
     notion_client = NotionClient(auth=settings.notion_token.get_secret_value())
-    writer = NotionWriter(client=notion_client, database_id=settings.notion_database_id)
+    writer = NotionWriter(
+        client=notion_client,
+        database_id=settings.notion_database_id,
+        data_source_id=settings.notion_data_source_id,
+    )
 
     app = ApplicationBuilder().token(settings.telegram_bot_token.get_secret_value()).build()
+    app.add_handler(CommandHandler("ping", _ping_cmd))
     handler = _make_handler(settings, writer)
     app.add_handler(
         MessageHandler(

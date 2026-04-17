@@ -27,6 +27,8 @@ No HTTP server. No webhooks. No third-party SaaS.
   - `Date` (date)
   - `Media type` (select with options: `text`, `photo`, `document`, `video`, `animation`, `voice`)
 
+**Linked / multi-source Notion databases (2025+ API):** rows live under a **data source**, not the bare database id. The bot calls `databases.retrieve` and, if `data_sources` is present, parents new pages with the **first** data source plus your `NOTION_DATABASE_ID`. Override with **`NOTION_DATA_SOURCE_ID`** if you have several sources.
+
 ## Setup
 
 ```bash
@@ -42,7 +44,8 @@ uv run python -m telegram_to_notion
 ```
 
 The bot will begin long-polling. Send it a message in Telegram and a new page
-should appear in your Notion database.
+should appear in your Notion database. You should get a short **Telegram reply** with the
+Notion page id on success (or an error hint). Send **`/ping`** to confirm the bot is running.
 
 ## Deploy (devbox, systemd user)
 
