@@ -1,3 +1,5 @@
+"""Tests for ``telegram_to_notion.models``."""
+
 from datetime import datetime, timezone
 
 from telegram_to_notion.models import IncomingMessage, MediaPayload, MediaType

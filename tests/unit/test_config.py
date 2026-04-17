@@ -1,3 +1,5 @@
+"""Tests for ``telegram_to_notion.config.Settings``."""
+
 import pytest
 from pydantic import ValidationError
 

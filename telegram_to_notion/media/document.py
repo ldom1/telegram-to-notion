@@ -1,4 +1,4 @@
-"""Document extraction."""
+"""Download a Telegram document attachment as ``MediaPayload``."""
 
 from telegram import Message
 
@@ -7,6 +7,7 @@ from telegram_to_notion.models import MediaPayload
 
 
 async def extract_document(message: Message) -> MediaPayload:
+    """Resolve ``message.document``; default MIME ``application/octet-stream`` if missing."""
     doc = message.document
     if doc is None:
         raise ValueError("message has no document")

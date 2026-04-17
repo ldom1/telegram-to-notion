@@ -1,4 +1,4 @@
-"""Animation / GIF extraction."""
+"""Download Telegram animation (GIF) payloads as ``MediaPayload``."""
 
 from telegram import Message
 
@@ -7,6 +7,7 @@ from telegram_to_notion.models import MediaPayload
 
 
 async def extract_animation(message: Message) -> MediaPayload:
+    """Resolve ``message.animation``; often reported as ``video/mp4`` without a file name."""
     anim = message.animation
     if anim is None:
         raise ValueError("message has no animation")

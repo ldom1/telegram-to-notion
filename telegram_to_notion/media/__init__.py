@@ -1,4 +1,4 @@
-"""Media extraction + download helpers."""
+"""Media extraction and Telegram file download helpers (photo, doc, video, GIF)."""
 
 from telegram_to_notion.media.animation import extract_animation
 from telegram_to_notion.media.base import download_telegram_file

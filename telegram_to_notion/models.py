@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class MediaType(str, Enum):
+    """Kind of Telegram content we persist to Notion."""
+
     TEXT = "text"
     PHOTO = "photo"
     DOCUMENT = "document"
@@ -15,6 +17,8 @@ class MediaType(str, Enum):
 
 
 class MediaPayload(BaseModel):
+    """Downloaded file bytes plus filename and MIME type for Notion upload."""
+
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     content: bytes
@@ -24,10 +28,13 @@ class MediaPayload(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def size_bytes(self) -> int:
+        """Length of ``content`` in bytes."""
         return len(self.content)
 
 
 class IncomingMessage(BaseModel):
+    """Normalized inbound message: text/caption, sender, time, media."""
+
     model_config = ConfigDict(frozen=True)
 
     text: str | None
@@ -40,6 +47,7 @@ class IncomingMessage(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def title(self) -> str:
+        """First line of text or caption (trimmed, max 200 chars), else ``[media_type]``."""
         source = self.text or self.caption
         if source:
             first_line = source.strip().splitlines()[0]
@@ -49,4 +57,5 @@ class IncomingMessage(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def body(self) -> str:
+        """Full text or caption for the page body (empty string if neither)."""
         return self.text or self.caption or ""

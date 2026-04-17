@@ -38,9 +38,13 @@ should appear in your Notion database.
 ## Development
 
 ```bash
-uv run pytest           # test suite
-uv run ruff check .     # lint
-uv run mypy telegram_to_notion  # type-check
+uv run pytest tests/unit -v              # unit tests only (no network)
+uv run pytest tests/integration -v       # live Notion (needs repo-root .env)
+uv run pytest tests/unit tests/integration -v  # everything
+uv run ruff check .
+uv run ruff format --check .
+PYLINTHOME=.pylint_cache uv run pylint telegram_to_notion --fail-under=9.5
+uv run mypy telegram_to_notion
 ```
 
 ## Project layout

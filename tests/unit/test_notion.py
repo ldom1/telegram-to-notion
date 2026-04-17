@@ -1,5 +1,7 @@
+"""Unit tests for ``NotionWriter`` with a mocked Notion SDK client."""
+
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""Shared Telegram file download helper."""
+"""Resolve Telegram ``file_id`` to bytes over HTTPS (Bot API file URL)."""
 
 import httpx
 from telegram import Bot
@@ -9,7 +9,7 @@ from telegram_to_notion.models import MediaPayload
 async def download_telegram_file(
     bot: Bot, file_id: str, filename: str, mime_type: str
 ) -> MediaPayload:
-    """Resolve a Telegram file_id to bytes via the Bot API."""
+    """Download a file by ``file_id`` and return a ``MediaPayload`` for Notion upload."""
     tg_file = await bot.get_file(file_id)
     url = tg_file.file_path
     if url is None:
