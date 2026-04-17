@@ -35,6 +35,28 @@ uv run python -m telegram_to_notion
 The bot will begin long-polling. Send it a message in Telegram and a new page
 should appear in your Notion database.
 
+## Deploy (devbox, systemd user)
+
+The bot runs on **`devbox`** under your user as **`telegram-to-notion.service`**
+(user systemd, `loginctl` linger is enabled so it stays up after logout).
+
+- **Repo on server:** `~/Lab/dom-telegram-to-notion`
+- **Secrets:** `.env` in that directory (not in git). After editing locally, copy again if needed:  
+  `scp .env devbox:/home/lgiron/Lab/dom-telegram-to-notion/.env`
+
+**Update the running bot after you push from your laptop:**
+
+```bash
+ssh devbox 'cd ~/Lab/dom-telegram-to-notion && git pull && ~/.local/bin/uv sync && systemctl --user restart telegram-to-notion.service'
+```
+
+**Logs / status:**
+
+```bash
+ssh devbox 'systemctl --user status telegram-to-notion.service'
+ssh devbox 'journalctl --user -u telegram-to-notion.service -f'
+```
+
 ## Development
 
 ```bash
