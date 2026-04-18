@@ -4,6 +4,7 @@ import asyncio
 import tempfile
 from datetime import timezone
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 from notion_client import APIResponseError, AsyncClient as NotionClient
@@ -80,7 +81,7 @@ async def health_check(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("telegram-to-notion: ok")
 
 
-def build_application(settings: Settings) -> Application:
+def build_application(settings: Settings) -> Application[Any, Any, Any, Any, Any, Any]:
     """Wire Telegram Application with Notion-backed message handlers."""
     notion_client = NotionClient(auth=settings.notion_token.get_secret_value())
     writer = NotionDatabaseWriter(client=notion_client, database_id=settings.notion_database_id)

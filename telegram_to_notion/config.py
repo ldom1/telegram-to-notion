@@ -49,4 +49,4 @@ class Settings(BaseSettings):  # pylint: disable=too-many-instance-attributes
 
 def load_settings() -> Settings:
     """Load settings, failing fast with a clear error on missing vars."""
-    return Settings()  # type: ignore[call-arg]
+    return Settings()

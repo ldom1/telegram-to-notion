@@ -51,6 +51,7 @@ target-version = "py312"
 [tool.mypy]
 python_version = "3.12"
 strict = true
+plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = "faster_whisper"

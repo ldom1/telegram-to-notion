@@ -22,7 +22,7 @@ class NotionDatabaseWriter:
                 parent={"type": "database_id", "database_id": self.database_id},
                 properties=properties.to_notion_properties(),
             )
-            return page["id"]
+            return str(page["id"])
         except APIResponseError as e:
             logger.error(
                 f"Failed to create page in database {self.database_id} for {properties.name}: {e}"
