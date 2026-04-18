@@ -1,5 +1,11 @@
 # telegram-to-notion
 
+[![CI](https://github.com/ldom1/telegram-to-notion/actions/workflows/ci.yml/badge.svg)](https://github.com/ldom1/telegram-to-notion/actions/workflows/ci.yml)
+[![Latest tag](https://img.shields.io/github/v/tag/ldom1/telegram-to-notion?label=tag&sort=semver)](https://github.com/ldom1/telegram-to-notion/tags)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+
 **Your Telegram bot is now your Notion inbox.** Send a link, a photo, or a voice note — it lands in your Notion database, fully structured, in seconds.
 
 No webhooks. No third-party SaaS. No data leaving your server.
