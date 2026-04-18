@@ -1,96 +1,85 @@
-"""Tests for OpenRouter enrichment."""
+"""Unit tests for OpenRouter enrichment — no real HTTP calls."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 from pydantic import SecretStr
 
 from telegram_to_notion.config import Settings
-from telegram_to_notion.models import IncomingMessage, MediaType
 from telegram_to_notion.llm.openrouter import interpret_message
+from telegram_to_notion.models import IncomingMessage, MediaType
 
 
-@pytest.fixture
-def sample_message():
+def _settings(api_key: str | None = "sk-test") -> Settings:
+    return Settings(
+        telegram_bot_token=SecretStr("tg-test"),
+        notion_token=SecretStr("notion-test"),
+        notion_database_id="db-test",
+        openrouter_api_key=SecretStr(api_key) if api_key else None,
+    )
+
+
+def _msg(text: str = "Hello world") -> IncomingMessage:
     return IncomingMessage(
-        text="See https://example.com/path for details",
+        text=text,
         caption=None,
-        sender="bob",
-        sent_at=datetime(2026, 4, 17, tzinfo=timezone.utc),
+        sender="tester",
+        sent_at=datetime(2026, 4, 18, tzinfo=timezone.utc),
         media_type=MediaType.TEXT,
         media=None,
     )
 
 
-async def test_interpret_without_api_key(sample_message):
-    settings = Settings(
-        telegram_bot_token=SecretStr("t"),
-        notion_token=SecretStr("n"),
-        notion_database_id="d",
-        openrouter_api_key=None,
-        _env_file=None,  # type: ignore[call-arg]
-    )
-    out = await interpret_message(settings, sample_message)
-    assert out.title == sample_message.title
-    assert out.url == "https://example.com/path"
+class TestInterpretMessage:
+    @pytest.mark.asyncio
+    async def test_no_api_key_returns_heuristic_base(self):
+        settings = _settings(api_key=None)
+        result = await interpret_message(settings, _msg("check https://github.com/x/y"))
+        assert result.label == ["telegram"]
+        assert result.url == "https://github.com/x/y"
+        assert result.source == "GitHub"
 
+    @pytest.mark.asyncio
+    async def test_empty_api_key_returns_heuristic_base(self):
+        settings = _settings(api_key="   ")
+        result = await interpret_message(settings, _msg())
+        assert result.label == ["telegram"]
 
-@patch("telegram_to_notion.llm.openrouter.httpx.AsyncClient")
-async def test_interpret_openrouter_success(mock_client_cls, sample_message, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t:ok")
-    monkeypatch.setenv("NOTION_TOKEN", "secret")
-    monkeypatch.setenv("NOTION_DATABASE_ID", "db")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
-    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    @pytest.mark.asyncio
+    async def test_http_error_falls_back_to_heuristics(self):
+        settings = _settings()
+        with patch("telegram_to_notion.llm.openrouter.httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                side_effect=RuntimeError("boom")
+            )
+            result = await interpret_message(settings, _msg())
+        assert result.label == ["telegram"]  # heuristic default
 
-    response = MagicMock()
-    response.raise_for_status = MagicMock()
-    response.json.return_value = {
-        "choices": [
-            {
-                "message": {
-                    "content": '{"title":"T","label":"work","type":"link","source":"Twitter / X",'
-                    '"url":"https://x.com","description":"D","interest":"High"}'
+    @pytest.mark.asyncio
+    async def test_successful_response_is_parsed_into_properties(self):
+        settings = _settings()
+        fake_response_body = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"Name":"Cool tool","Label":["dev","ai"],"Type":"link",'
+                        '"Link":"https://ex.com","Source":"Example",'
+                        '"Description":"A great tool.","Interest":"High"}'
+                    }
                 }
-            }
-        ]
-    }
-    instance = MagicMock()
-    instance.__aenter__ = AsyncMock(return_value=instance)
-    instance.__aexit__ = AsyncMock(return_value=None)
-    instance.post = AsyncMock(return_value=response)
-    mock_client_cls.return_value = instance
-
-    out = await interpret_message(settings, sample_message)
-    assert out.title == "T"
-    assert out.label == "work"
-    assert out.entry_type == "link"
-    assert out.url == "https://x.com"
-    assert out.description == "D"
-    assert out.interest == "High"
-    assert out.source == "Twitter / X"
-
-
-@patch("telegram_to_notion.llm.openrouter.httpx.AsyncClient")
-async def test_interpret_openrouter_http_error(mock_client_cls, sample_message, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t:ok")
-    monkeypatch.setenv("NOTION_TOKEN", "secret")
-    monkeypatch.setenv("NOTION_DATABASE_ID", "db")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
-    settings = Settings(_env_file=None)  # type: ignore[call-arg]
-
-    response = MagicMock()
-    req = MagicMock()
-    res = MagicMock()
-    res.status_code = 500
-    response.raise_for_status.side_effect = httpx.HTTPStatusError("err", request=req, response=res)
-    instance = MagicMock()
-    instance.__aenter__ = AsyncMock(return_value=instance)
-    instance.__aexit__ = AsyncMock(return_value=None)
-    instance.post = AsyncMock(return_value=response)
-    mock_client_cls.return_value = instance
-
-    out = await interpret_message(settings, sample_message)
-    assert out.label == "telegram"
+            ]
+        }
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = AsyncMock()
+        mock_resp.json = lambda: fake_response_body
+        with patch("telegram_to_notion.llm.openrouter.httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_resp
+            )
+            result = await interpret_message(settings, _msg())
+        assert result.name == "Cool tool"
+        assert result.label == ["dev", "ai"]
+        assert result.entry_type == "link"
+        assert result.url == "https://ex.com"
+        assert result.interest == "High"

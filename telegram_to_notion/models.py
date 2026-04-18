@@ -3,7 +3,7 @@
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -25,9 +25,6 @@ class MediaType(str, Enum):
 
     TEXT = "text"
     PHOTO = "photo"
-    DOCUMENT = "document"
-    VIDEO = "video"
-    ANIMATION = "animation"
     VOICE = "voice"
 
 
@@ -61,7 +58,7 @@ class IncomingMessage(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def title(self) -> str:
+    def name(self) -> str:
         """First line of text or caption (trimmed, max 200 chars), else ``[media_type]``."""
         source = self.text or self.caption
         if source:
@@ -76,32 +73,92 @@ class IncomingMessage(BaseModel):
         return self.text or self.caption or ""
 
 
-class NotionEnrichment(BaseModel):
-    """Structured row fields for Notion (from OpenRouter or heuristics)."""
+class NotionDatabaseProperties(BaseModel):
+    """Structured row fields for Notion Database Properties (from OpenRouter or heuristics)."""
 
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True, populate_by_name=True)
 
-    title: str
-    label: str = ""
-    entry_type: str = Field(default="", alias="type")
-    url: str | None = None
-    source: str | None = None
-    description: str = ""
-    interest: str = ""
+    name: str = Field(default="", alias="Name", description="Concise page title (≤ 10 words).")
+    label: str | list[str] = Field(
+        default="",
+        alias="Label",
+        description=(
+            "Tag that best categorises the message (e.g. work, dev, finance, idea, "
+            "health, learning, news, project). Can be a list of tags separated by commas."
+        ),
+    )
+    entry_type: str = Field(
+        default="",
+        alias="Type",
+        description="Exactly one of: note | Task | Link | Media | Question | Other.",
+    )
+    url: str | None = Field(
+        default=None,
+        alias="Link",
+        description="The primary URL found in the message, or null if none.",
+    )
+    source: str | None = Field(
+        default=None,
+        alias="Source",
+        description=(
+            "Platform or origin if identifiable from the URL or context "
+            "(e.g. Instagram, LinkedIn, YouTube, GitHub, arXiv); otherwise null."
+        ),
+    )
+    description: str = Field(
+        default="",
+        alias="Description",
+        description=(
+            "1–3 sentences summarising the message for a human reader. "
+            "Focus on what the content *is about*, not on the fact that it was sent via Telegram."
+        ),
+    )
+    interest: str = Field(
+        default="",
+        alias="Interest",
+        description=(
+            "Exactly one of: Low | Medium | High. "
+            "Assess based on apparent novelty, actionability, or personal relevance."
+        ),
+    )
+    status: str = "Not analysed"
 
     @classmethod
     def from_incoming(cls, msg: IncomingMessage) -> Self:
-        """Heuristic mapping when OpenRouter is disabled or fails."""
+        """Heuristic mapping when Agent is disabled or fails."""
         body = msg.body
         url = _first_url(body) if body else None
-        desc = body if body else msg.title
+        desc = body if body else msg.name
         src = infer_source_label(body) if body else None
         return cls(
-            title=msg.title[:2000],
-            label="telegram",
-            type=msg.media_type.value,
+            name=msg.name,
+            label=["telegram"],
+            entry_type=msg.media_type.value,
             url=url,
             source=src,
             description=desc[:8000],
             interest="Medium",
+            status="Not analysed",
         )
+
+    def to_notion_properties(self) -> dict[str, Any]:
+        """Return a Notion-API-ready properties payload."""
+        labels = (
+            self.label if isinstance(self.label, list) else ([self.label] if self.label else [])
+        )
+        props: dict[str, Any] = {
+            "Name": {"title": [{"text": {"content": self.name[:2000]}}]},
+            "Label": {"multi_select": [{"name": lbl} for lbl in labels if lbl]},
+            "Description": {"rich_text": [{"text": {"content": self.description[:2000]}}]},
+        }
+        if self.entry_type:
+            props["Type"] = {"select": {"name": self.entry_type}}
+        if self.interest:
+            props["Interest"] = {"select": {"name": self.interest}}
+        if self.status:
+            props["Status"] = {"status": {"name": self.status}}
+        if self.url:
+            props["Link"] = {"url": self.url}
+        if self.source:
+            props["Source"] = {"select": {"name": self.source}}
+        return props

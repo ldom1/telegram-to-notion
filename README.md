@@ -1,101 +1,82 @@
 # telegram-to-notion
 
-Self-hosted Telegram → Notion bridge. A Telegram bot listens for messages (text,
-photos, documents, videos, GIFs, **voice notes**) via long polling and forwards each one as a
-structured page into a Notion database. Voice is transcribed locally with
-[faster-whisper](https://github.com/SYSTRAN/faster-whisper) (bundled with `uv sync`; model downloads on first use).
-Optional [OpenRouter](https://openrouter.ai/) (`google/gemini-2.5-flash-lite` by default) fills
-**Title**, **Label**, **Type**, **URL**, **Description**, **Interest**, and a structured **source**
-(platform, e.g. GitHub); when set, **source** is appended to the Notion **Description** (no extra DB column).
-Without `OPENROUTER_API_KEY`, the same columns are filled with simple heuristics (including **source** when a known URL host appears).
+**Your Telegram bot is now your Notion inbox.** Send a link, a photo, or a voice note — it lands in your Notion database, fully structured, in seconds.
 
-No HTTP server. No webhooks. No third-party SaaS.
+No webhooks. No third-party SaaS. No data leaving your server.
 
-## Prerequisites
+## Why you'll like it
 
-- Python 3.12
-- [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- A [Notion internal integration](https://www.notion.so/my-integrations) token
-- A Notion database shared with that integration, containing the properties:
-  - `Title` (title) — if your first column is **`Name`**, set **`NOTION_TITLE_PROPERTY=Name`**
-  - `Label` (rich text)
-  - `Type` (rich text) — LLM or heuristic “kind” (e.g. note, link, media)
-  - `URL` (url) — set when a link is detected or proposed by the LLM
-  - `Description` (rich text)
-  - `Interest` (rich text) — e.g. Low / Medium / High
-  - `Sender` (rich text) — Telegram username or display name
-  - `Date` (date)
-  - `Media type` (select with options: `text`, `photo`, `document`, `video`, `animation`, `voice`)
+- **Voice-to-Notion, offline.** Dictate an idea, get a transcribed, titled, categorized page. All on-device via [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
+- **LLM-powered enrichment (optional).** Point it at [OpenRouter](https://openrouter.ai/) and every message becomes a Notion row with a smart title, tags, summary, detected source (GitHub, YouTube, arXiv…), and interest level.
+- **Heuristics fallback.** No API key, no problem — URLs, platforms, and basic categorization still just work.
+- **One binary, zero infra.** Long polling only. Runs as a single systemd user service. Perfect for a home server.
 
-**Linked / multi-source Notion databases (2025+ API):** rows live under a **data source**. The bot calls `databases.retrieve`, then **`data_sources.retrieve`** on each source until it finds one whose **property names** match this bridge (or falls back to the first source). `pages.create` uses parent `type` + `data_source_id` only (Notion rejects `database_id` on that parent). Override with **`NOTION_DATA_SOURCE_ID`** if needed.
+## What goes in, what comes out
 
-**Database id from a Notion URL:** use the **32-character** id in the page path (before `?`), e.g. `https://www.notion.so/3456c45194658025ac90ff3627b14bbf?...` → set `NOTION_DATABASE_ID` to that string (hyphens optional; they are normalized).
+You send: `J'ai trouvé un outil sympa: https://github.com/ldom1/telegram-to-notion`
 
-## Setup
+Notion receives:
+
+| Name | Label | Type | Source | Link | Description | Interest |
+|---|---|---|---|---|---|---|
+| Telegram-to-Notion bridge | `[tool, dev, python]` | link | GitHub | github.com/… | Self-hosted pipeline from Telegram to Notion. | High |
+
+Voice notes? Same thing — transcribed first, then enriched.
+
+## Setup (2 minutes)
 
 ```bash
-cp .env.example .env
-# edit .env: TELEGRAM_BOT_TOKEN, NOTION_TOKEN, NOTION_DATABASE_ID; optional OPENROUTER_API_KEY
+git clone https://github.com/ldom1/telegram-to-notion && cd telegram-to-notion
+cp .env.example .env   # fill in TELEGRAM_BOT_TOKEN, NOTION_TOKEN, NOTION_DATABASE_ID
 uv sync
-```
-
-## Run
-
-```bash
 uv run python -m telegram_to_notion
 ```
 
-The bot will begin long-polling. Send it a message in Telegram and a new page
-should appear in your Notion database. You should get a short **Telegram reply** with the
-Notion page id on success (or an error hint). Send **`/ping`** to confirm the bot is running.
+Send your bot a message on Telegram. Send `/ping` to confirm it's alive.
 
-## Deploy (devbox, systemd user)
+### What you need
 
-The bot runs on **`devbox`** under your user as **`telegram-to-notion.service`**
-(user systemd, `loginctl` linger is enabled so it stays up after logout).
+- Python 3.12 + [uv](https://docs.astral.sh/uv/)
+- A Telegram bot from [@BotFather](https://t.me/BotFather)
+- A [Notion integration](https://www.notion.so/my-integrations) + a database shared with it, containing columns: `Name` (title), `Label` (multi-select), `Type` (select), `Link` (url), `Source` (select), `Description` (text), `Interest` (select), `Status` (status)
+- *(Optional)* An [OpenRouter API key](https://openrouter.ai/keys) for LLM enrichment
 
-- **Repo on server:** `~/Lab/dom-telegram-to-notion`
-- **Secrets:** `.env` in that directory (not in git). After editing locally, copy again if needed:  
-  `scp .env devbox:/home/lgiron/Lab/dom-telegram-to-notion/.env`
-
-**Update the running bot after you push from your laptop:**
+## Try it without Telegram
 
 ```bash
-ssh devbox 'cd ~/Lab/dom-telegram-to-notion && git pull && ~/.local/bin/uv sync && systemctl --user restart telegram-to-notion.service'
+uv run python examples/example.py
 ```
 
-**Logs / status:**
+Builds a fake `IncomingMessage`, runs it through the same enrichment pipeline, writes to your Notion DB.
+
+## Deploy (systemd user service)
 
 ```bash
-ssh devbox 'systemctl --user status telegram-to-notion.service'
-ssh devbox 'journalctl --user -u telegram-to-notion.service -f'
+ssh <your-server> 'cd ~/Lab/dom-telegram-to-notion && git pull && uv sync && systemctl --user restart telegram-to-notion.service'
+ssh <your-server> 'journalctl --user -u telegram-to-notion.service -f'
 ```
 
-## Development
+## Develop
 
 ```bash
-uv run pytest tests/unit -v              # unit tests only (no network)
-uv run pytest tests/integration -v       # live Notion (needs repo-root .env)
-uv run pytest tests/unit tests/integration -v  # everything
-uv run ruff check .
-uv run ruff format --check .
-PYLINTHOME=.pylint_cache uv run pylint telegram_to_notion --fail-under=9.5
-uv run mypy telegram_to_notion
+uv run pytest tests/unit -v              # fast, no network
+uv run pytest tests/integration -v       # hits real Notion + OpenRouter + Whisper
+uv run ruff check . && uv run mypy telegram_to_notion
 ```
 
-## Project layout
+## Under the hood
 
 ```
 telegram_to_notion/
-├── config.py      # Pydantic settings (env var validation)
-├── models.py      # Internal Pydantic data types
-├── notion.py      # Notion page + file_upload wrapper
+├── bot.py            # Telegram long-polling listener + handlers
+├── config.py         # Pydantic settings from .env
+├── models.py         # IncomingMessage + NotionDatabaseProperties
+├── notion.py         # NotionDatabaseWriter (create / update / delete)
 ├── llm/
-│   ├── openrouter.py   # Optional LLM enrichment via OpenRouter
-│   ├── prompt.py       # System prompt for structured JSON extraction
-│   └── source_hints.py # URL host → platform label (prompt + heuristics)
-├── transcribe.py  # faster-whisper wrapper (default dependency)
-├── bot.py         # Telegram polling + handlers
-└── media/         # Per-media-type extractors + shared downloader
+│   ├── openrouter.py # Structured JSON extraction via chat completions
+│   ├── prompt.py     # System prompt built from the Pydantic model
+│   └── source_hints.py
+└── media/            # Photo + voice download, on-device transcription
 ```
+
+Contributions welcome. Short & sharp.

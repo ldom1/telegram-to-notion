@@ -1,10 +1,68 @@
+# --- Secrets & local-only ---
+# Never commit credentials or machine-specific deploy scripts.
 .env
-.venv/
+.env.*
+!.env.example
+deploy.sh
+PLAN.md
+
+# --- Python bytecode & packaging ---
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+dist/
+build/
+*.egg
+*.egg-info/
+.eggs/
+MANIFEST
+
+# --- Virtualenvs ---
+.venv/
+venv/
+env/
+.python-version
+
+# --- Test & coverage artifacts ---
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.hypothesis/
+
+# --- Type-checker / linter caches ---
 .mypy_cache/
 .ruff_cache/
 .pylint_cache/
-dist/
-*.egg-info/
+.pyre/
+.pytype/
+
+# --- Jupyter / notebooks ---
+.ipynb_checkpoints/
+# local scratch notebook — keep uncommitted
+test.ipynb
+
+# --- IDE / editor state ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Generated files ---
+# Written by hatch-vcs at build time from the current git tag.
+telegram_to_notion/_version.py
+
+# --- Project-specific ---
+# faster-whisper model weights if dropped in a local models/ dir
+models/
+*.onnx
+# Ad-hoc debug logs
+*.log
+logs/

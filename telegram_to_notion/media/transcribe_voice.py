@@ -1,18 +1,10 @@
-"""Local speech-to-text using Faster Whisper (open-source, on-device). No API key.
-
-For OpenClaw-style setups (Telegram/Discord voice), you can wrap the same stack with a small
-shell script and shared config; see your OpenClaw repo (e.g. ``transcribe-audio.sh`` and channel
-guides) if you use that layout alongside this bridge.
-"""
+"""Local speech-to-text using Faster Whisper (open-source, on-device)"""
 
 from pathlib import Path
 
 from loguru import logger
 
-try:
-    from faster_whisper import WhisperModel
-except ImportError:
-    WhisperModel = None
+from faster_whisper import WhisperModel
 
 
 def transcribe_file(
